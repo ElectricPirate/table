@@ -1,0 +1,283 @@
+Public TabelPath, TableFileName, PeoplePath, PeopleFileName As String
+Dim FirstLineAll, FirstLineRTK, FirstLineNight, LastLineAll, LastLineRTK, LastLineNight, FirstDay, LastDay, Days, LengthFIOAll, Problems, TableNumberPosR, TableNumberPosC, EmployeePosR, EmployeePosC, RTKFios, FioLength As Integer
+Dim ProblemFIO, ProblemDate As collection
+
+Public Function Main()
+
+Set ProblemFIO = New collection
+Set ProblemDate = New collection
+Application.ScreenUpdating = 0
+Dim TableSheets As collection
+
+
+FirstDay = UserForm1.TextBoxFirstDay.Value
+LastDay = UserForm1.TextBoxLastDay.Value
+Problems = 0
+Days = LastDay - FirstDay
+
+TablePath = UserForm1.TextBoxTablePath.Value
+TableFileName = Dir(TablePath)
+PeoplePath = UserForm1.TextBoxPeoplePath.Value
+PeopleFileName = Dir(PeoplePath)
+Workbooks.Open TablePath
+
+FirstLineAll = FindFirstLine(TableFileName, "Âñåãî")
+LastLineAll = FindLastLine(TableFileName, "Âñåãî")
+FirstLineNight = FindFirstLine(TableFileName, "Íî÷íûå")
+LastLineNight = FindLastLine(TableFileName, "Íî÷íûå")
+LengthFIOAll = LastLineAll - FirstLineAll
+FirstLineRTK = FindFirstLine(ThisWorkbook.Name, "Øòàò ÐÒÊ")
+LastLineRTK = FindLastLine(ThisWorkbook.Name, "Øòàò ÐÒÊ")
+RTKFios = LastLineRTK - FirstLineRTK
+
+
+
+Call FillingAll("Âñåãî")
+Call FillingNight("Íî÷íûå")
+Call FillingAbsence("Áîëüíè÷íûå", "Á")
+Call FillingAbsence("Îòïóñê", "ÎÒ")
+Call FillingAbsence("Íåîï_îòïóñê", "ÄÎ")
+Call FillingAbsence("Ó÷åí_îòïóñê", "ÓÎ")
+Call FillingAbsence("Ïðîãóë", "ÍÍ")
+Call FillingDaysOff("Âûõîäíûå", "Â")
+Call ReplaceCommasForDots
+Call FindingProblems(ProblemFIO, 1)
+Call FindingProblems(ProblemDate, 2)
+Call FIToFIO
+
+If Problems > 0 Then
+    MsgBox "Íàéäåíî " & Problems / 2 & " ïðîáëåì. Çàãëÿíèòå íà ëèñò Ïðîáëåìû."
+End If
+
+Application.Workbooks(TableFileName).Close
+Application.ScreenUpdating = 1
+
+End Function
+
+Public Sub FIToFIO()
+
+Application.ScreenUpdating = 0
+PeopleFileName = Dir(PeoplePath)
+Workbooks.Open PeoplePath
+
+Dim c, lastline
+With Worksheets(1).Range("A1:AB50")
+  Set c = .Find("Òàáåëüíûé íîìåð", LookIn:=xlValues)
+  If Not c Is Nothing Then
+    firstResult = c.Address
+    Do
+      Set c = .FindNext(c)
+      If c Is Nothing Then Exit Do
+    Loop While c.Address <> firstResult
+  End If
+End With
+
+TableNumberPosR = c.row
+TableNumberPosC = c.Column
+EmployeePosR = TableNumberPosR
+EmployeePosC = TableNumberPosC - 1
+
+For i = 2 To FioLength
+    For j = EmployeePosR To 400
+        If InStrRev(Workbooks(PeopleFileName).sheets(1).Cells(j, EmployeePosC), ThisWorkbook.Worksheets(1).Cells(i, 1)) > 0 Then
+            If InStrRev(Workbooks(PeopleFileName).sheets(1).Cells(j, EmployeePosC), " (ñîâì.)") > 0 Then
+                 ThisWorkbook.Worksheets(1).Cells(i, 1) = Left(Workbooks(PeopleFileName).sheets(1).Cells(j, EmployeePosC), Len(Workbooks(PeopleFileName).sheets(1).Cells(j, EmployeePosC)) - 8)
+                 ThisWorkbook.Worksheets(1).Cells(i, 2) = Workbooks(PeopleFileName).sheets(1).Cells(j, TableNumberPosC).Value
+            Else
+                 ThisWorkbook.Worksheets(1).Cells(i, 1) = Workbooks(PeopleFileName).sheets(1).Cells(j, EmployeePosC).Value
+                 ThisWorkbook.Worksheets(1).Cells(i, 2) = Workbooks(PeopleFileName).sheets(1).Cells(j, TableNumberPosC).Value
+            End If
+        End If
+    Next j
+Next i
+
+
+Application.Workbooks(PeopleFileName).Close SaveChanges:=False
+Application.ScreenUpdating = 1
+
+End Sub
+Public Function FindFirstLine(Workbook, sheet)
+
+For i = 1 To 300
+   If Workbooks(Workbook).sheets(sheet).Cells(i, 1) = "Person" Then
+   FindFirstLine = i + 1
+   Exit Function
+   End If
+   Next i
+     
+End Function
+
+Public Function FindLastLine(Workbook, sheet)
+
+Dim k As Integer
+k = 0
+For i = 1 To 300
+   If Workbooks(Workbook).sheets(sheet).Cells(i, 1) = "" Then
+   k = k + 1
+   If k = 2 Then
+   FindLastLine = i - 1
+   Exit Function
+   End If
+   End If
+   Next i
+     
+End Function
+
+Public Function SelectPathToTable() As String
+
+    Dim TablePath, TableFileName
+    TablePath = Application.GetOpenFilename _
+                ("Excel files(*.xls*),*.xls*", 1, "Âûáðàòü Excel ôàéë", , False)
+    If VarType(TablePath) = vbBoolean Then
+        Exit Function
+    End If
+    SelectPathToTable = TablePath
+    
+End Function
+
+Public Sub FillingAll(sheet)
+
+Dim FioRTKFlag As Boolean
+Dim FioPosition As Integer
+FioPosition = 2
+For k = FirstLineAll To LastLineAll
+    FioRTKFlag = False
+    For l = FirstLineRTK To LastLineRTK
+        If Workbooks(TableFileName).Worksheets(sheet).Cells(k, 1) = ThisWorkbook.Worksheets("Øòàò ÐÒÊ").Cells(l, 1).Value Then
+            FioRTKFlag = True
+        End If
+    Next l
+    If FioRTKFlag = False Then
+        ThisWorkbook.Worksheets(1).Cells(FioPosition, 1) = Workbooks(TableFileName).Worksheets(sheet).Cells(k, 1).Value
+        FioPosition = FioPosition + 1
+    End If
+Next k
+
+FioLength = FindLastLine(ThisWorkbook.Name, 1) - 1
+
+For i = 2 To FioLength + 1
+    For j = FirstLineAll To LastLineAll
+        If ThisWorkbook.Worksheets(1).Cells(i, 1) = Workbooks(TableFileName).Worksheets(sheet).Cells(j, 1).Value Then
+            For d = FirstDay To LastDay
+                If Workbooks(TableFileName).Worksheets(sheet).Cells(j, d + 1) <> 0 Then
+                    ThisWorkbook.Worksheets(1).Cells(i, d + 2) = Round(Workbooks(TableFileName).Worksheets(sheet).Cells(j, d + 1).Value, 1)
+                End If
+            Next d
+        End If
+    Next j
+Next i
+
+'Range(ThisWorkbook.Worksheets(1).Cells(2, 1), ThisWorkbook.Worksheets(1).Cells(LengthFIOAll + 2, 1)) = Range(Workbooks(TableFileName).Worksheets(sheet).Cells(FirstLineAll, 1), Workbooks(TableFileName).Worksheets(sheet).Cells(LastLineAll, 1)).Value
+'For i = 0 To LengthFIOAll
+   ' For j = FirstDay To LastDay
+                        
+               ' If Workbooks(TableFileName).Worksheets(sheet).Cells(FirstLineAll + i, j + 1) <> 0 Then
+                  '  ThisWorkbook.Worksheets(1).Cells(i + 2, j + 2) = Round(Workbooks(TableFileName).Worksheets(sheet).Cells(FirstLineAll + i, j + 1).Value, 2)
+               ' End If
+                
+    'Next j
+'Next i
+
+End Sub
+
+Public Sub FillingNight(sheet)
+
+For i = FirstLineNight To LastLineNight
+    For j = 2 To LengthFIOAll
+        If Workbooks(TableFileName).Worksheets(sheet).Cells(i, 1) = ThisWorkbook.Worksheets(1).Cells(j, 1) Then
+            For k = FirstDay To LastDay
+                If Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1) <> 0 Then
+                    If Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1) <> "" Then
+                        If ThisWorkbook.Worksheets(1).Cells(j, k + 2) = "" Then
+                            ThisWorkbook.Worksheets(1).Cells(j, k + 2) = Round(Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1).Value, 1)
+                        Else
+                            ThisWorkbook.Worksheets(1).Cells(j, k + 2) = Round(ThisWorkbook.Worksheets(1).Cells(j, k + 2).Value, 1) & "/" & Round(Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1).Value, 1)
+                        End If
+                    End If
+                End If
+            Next k
+        End If
+    Next j
+Next i
+    
+End Sub
+
+Public Sub FillingAbsence(sheet, absence)
+
+FirstLineAbsence = FindFirstLine(TableFileName, sheet)
+LastLineAbsence = FindLastLine(TableFileName, sheet)
+
+For i = FirstLineAbsence To LastLineAbsence
+    For j = 2 To LengthFIOAll
+        If Workbooks(TableFileName).Worksheets(sheet).Cells(i, 1) = ThisWorkbook.Worksheets(1).Cells(j, 1).Value Then
+            For k = FirstDay To LastDay
+            
+                If Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1) = 1 Then
+                    If ThisWorkbook.Worksheets(1).Cells(j, k + 2) = "" Then
+                        ThisWorkbook.Worksheets(1).Cells(j, k + 2) = absence
+                    Else
+                        ProblemFIO.Add (ThisWorkbook.Worksheets(1).Cells(j, 1))
+                        ProblemDate.Add k
+                        ThisWorkbook.Worksheets(1).Cells(j, k + 2) = ThisWorkbook.Worksheets(1).Cells(j, k + 2).Value & "/" & absence
+                    End If
+                End If
+                
+            Next k
+        End If
+    Next j
+Next i
+    
+End Sub
+
+Public Sub FillingDaysOff(sheet, absence)
+
+FirstLineAbsence = FindFirstLine(TableFileName, sheet)
+LastLineAbsence = FindLastLine(TableFileName, sheet)
+
+For i = FirstLineAbsence To LastLineAbsence
+    For j = 2 To LengthFIOAll
+        If Workbooks(TableFileName).Worksheets(sheet).Cells(i, 1) = ThisWorkbook.Worksheets(1).Cells(j, 1).Value Then
+            For k = FirstDay To LastDay
+                If Workbooks(TableFileName).Worksheets(sheet).Cells(i, k + 1) = 1 Then
+                
+                    If ThisWorkbook.Worksheets(1).Cells(j, k + 2) = "" Then
+                        ThisWorkbook.Worksheets(1).Cells(j, k + 2) = absence
+                    End If
+                                                                  
+                End If
+            Next k
+        End If
+    Next j
+Next i
+    
+End Sub
+
+Public Sub ClearRange()
+
+Application.ScreenUpdating = 0
+ThisWorkbook.Worksheets(1).Range(Cells(2, 1), Cells(500, 33)).ClearContents
+ThisWorkbook.Worksheets(2).Select
+ThisWorkbook.Worksheets(2).Range(Cells(2, 1), Cells(500, 2)).ClearContents
+ThisWorkbook.Worksheets(1).Select
+Application.ScreenUpdating = 1
+
+End Sub
+
+Sub ReplaceCommasForDots()
+
+For i = 2 To LengthFIOAll
+    For j = FirstDay To LastDay
+        ThisWorkbook.Worksheets(1).Cells(i, j + 2) = Replace(ThisWorkbook.Worksheets(1).Cells(i, j + 2).Value, ",", ".")
+    Next j
+Next i
+    
+End Sub
+Function FindingProblems(collection, row)
+
+For i = 2 To collection.Count + 1
+    ThisWorkbook.Worksheets(2).Cells(i, row) = collection(i - 1)
+    Problems = Problems + 1
+Next i
+
+End Function
+
